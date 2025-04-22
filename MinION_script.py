@@ -1,18 +1,20 @@
-"Developed by Bernardo Almeida, March 2025"
+"Developed by Bernardo Almeida, version 2, April 2025"
 
 #IMPORTS
 import gzip
 import shutil
 import os
 import pandas as pd
+import csv
+import re
 
 
 #MERGE MULTIPLE FASTQ.GZ FILES IN A SINGLE FILE
 
 # IMPUT PATH: Path to the folder with the fastq.gz files
-folder_of_gz_files_1 = r'C:\...\path_to_the_folder'
+folder_of_gz_files_1 = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 04Abr\fastq_fail\barcode04'
 # OUTPUT PATH: Path to the folder we want to save our merged file
-output_file_1 = r'C:\...\output_file.fastq.gz'
+output_file_1 = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 04Abr\fastq_fail\Mergedbarcode04_fastq_fail.fastq.gz'
 
 def fastq_gz_merge(folder_of_gz_files_1, output_file_1):
     with gzip.open(output_file_1, 'wb') as merged_file:
@@ -36,23 +38,60 @@ def fastq_gz_merge(folder_of_gz_files_1, output_file_1):
     # Column 6: Base quality encoding
     # Column 7: Mapping quality
 
+# Mapping multiple-base ambiguities to IUPAC codes
+ambiguity_codes = {
+    'AG': 'R',
+    'CT': 'Y',
+    'GT': 'K',
+    'AC': 'M',
+    'CG': 'S',
+    'AT': 'W',
+    'CGT': 'B',
+    'ATG': 'D',
+    'ACT': 'H',
+    'ACG': 'V',
+    'ACGT': 'N'
+}
+
 #file_name ends in .tabular
-file_name = r'C:\...\my_file.tabular'
+file_name = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 5Nov\MinION 5Nov (9h30 8Nov)\PCV2\Tabular_MinION_5Nov_PCV2_GenomeDetective.tabular'
 #output_file ends in .html
-output_file = r'C:\...\output_file.html'
+output_file = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 5Nov\MinION 5Nov (9h30 8Nov)\PCV2\bam_GenomeDetective_MinION 5Nov barcode2_PCV2.html'
+
+def convert_to_iupac(seq):
+    if len(seq) == 1:
+        return seq
+    return ambiguity_codes.get(''.join(sorted(seq)), 'N')  # Default to N
+
+def clean_pileup(pileup):
+    patterns = list(re.finditer(r'[+-](\d+)', pileup))
+    result = ''
+    index = 0
+    for pattern in patterns:
+        start, finish = pattern.span()
+        number = int(pattern.group(1))
+        end_remove = finish + number
+        result += pileup[index:start]
+        index = end_remove
+    result += pileup[index:]
+    return result
 
 # Auxiliary function to count characters
 def count_characters(pileup):
+    insertions = pileup.count('+')
+    deletions = pileup.count('-')
+    pileup = clean_pileup(pileup)  # clean insertions e deletions
     counts = {
         'Aa': pileup.count('A') + pileup.count('a'),
         'Cc': pileup.count('C') + pileup.count('c'),
         'Tt': pileup.count('T') + pileup.count('t'),
         'Gg': pileup.count('G') + pileup.count('g'),
-        'Nn': pileup.count('N') + pileup.count('n'),
-        '$': pileup.count('$'),
+        'Deletions': deletions,
+        'Insertions': insertions,
         }
-    # Couts characters different from: A, a, C, c, T, t, G, g, N, n, $
-    counts['Others'] = len(pileup) - sum(counts.values())
+    # Couts characters different from: A, a, C, c, T, t, G, g, -, +
+    nucleotideo_total = counts['Aa'] + counts['Cc'] + counts['Tt'] + counts['Gg']
+    counts['Others'] = len(pileup) - nucleotideo_total
     return pd.Series(counts)
 
 def determine_consensus(row):
@@ -61,33 +100,40 @@ def determine_consensus(row):
         'A': row['Aa'],
         'C': row['Cc'],
         'T': row['Tt'],
-        'G': row['Gg'],
-        'N': row['Nn']
+        'G': row['Gg']
     }
-    # Determines the maximum and filters bases with the maximum count
+    # Skip if all counts are zero (edge case)
+    if sum(base_counts.values()) == 0:
+        return 'N'
     max_count = max(base_counts.values())
-    consensus_bases = [base for base, count in base_counts.items() if count == max_count]
-    return ''.join(consensus_bases)
+    consensus_bases = []
+    for base, count in base_counts.items():
+        # Include the base if its count is ≥ 80% of the max count
+        if count >= 0.80 * max_count and count > 0:
+            consensus_bases.append(base)
+    return ''.join(sorted(consensus_bases))  # Sort for consistency
 
 # Function to style columns
 def style_specific_columns(s):
     color_map = {
-        'Aa': 'background-color: #3CFF14',   # Light Green
-        'Cc': 'background-color: #30F5E6',   # Light Blue
-        'Tt': 'background-color: #F93D15',   # red
-        'Gg': 'background-color: #CE19F6',   # Light Purple
-        'Nn': 'background-color: #E4D5E7'    # Light Grey
+        'Aa': 'background-color: #3CFF14',            # Light Green
+        'Cc': 'background-color: #30F5E6',            # Light Blue
+        'Tt': 'background-color: #F93D15',            # Red
+        'Gg': 'background-color: #CE19F6',            # Light Purple
+        'Deletions': 'background-color: #BFB917',     # Dark Yellow
+        'Insertions': 'background-color: #FAF68C'     # Light Yellow
     }
     return [color_map.get(s.name, '')] * len(s)
 
 # Function to style column "Consensus Seq"
 def style_consensus(value):
     color_map = {
-        'A': 'background-color: #3CFF14',   # Light Green
-        'C': 'background-color: #30F5E6',   # Light Blue
-        'T': 'background-color: #F93D15',   # Red
-        'G': 'background-color: #CE19F6',   # Light Purple
-        'N': 'background-color: #E4D5E7'    # Light Grey
+        'A': 'background-color: #3CFF14',             # Light Green
+        'C': 'background-color: #30F5E6',             # Light Blue
+        'T': 'background-color: #F93D15',             # Red
+        'G': 'background-color: #CE19F6',             # Light Purple
+        'Deletions': 'background-color: #BFB917',     # Dark Yellow
+        'Insertions': 'background-color: #FAF68C'     # Light Yellow
     }
     # If multiple letters have the same highest count, leave the cell with a white background
     if len(value) > 1:
@@ -96,15 +142,21 @@ def style_consensus(value):
 
 def read_bam(file_name, output_file):
     try:
-        data = pd.read_table(file_name, header=None, sep=r'\s+')
-        data = data.drop(columns=[0,2,5,6])
+        data = pd.read_table(file_name, header=None, sep=r'\s+', quoting=csv.QUOTE_NONE, engine='python')
+        data = data.drop(columns=[0,2,5])
         data = data.rename(columns={1: 'Nt. position', 3: 'Read Coverage', 4: 'Read alignment "Pileup"'})
         # Applies the counting function to each line and adds the new columns
         character_counts = data['Read alignment "Pileup"'].apply(count_characters)
         data = pd.concat([data[['Nt. position', 'Read Coverage']], character_counts, data[['Read alignment "Pileup"']]], axis=1)
         # Adds the "Consensus Seq" column using the determine_consensus function
         data['Consensus Seq'] = data.apply(determine_consensus, axis=1)
-        data = data[['Nt. position', 'Read Coverage', 'Aa', 'Cc', 'Tt', 'Gg', 'Nn', '$', 'Others', 'Consensus Seq', 'Read alignment "Pileup"']]
+        data = data[['Nt. position', 'Read Coverage', 'Aa', 'Cc', 'Tt', 'Gg', 'Deletions', 'Insertions', 'Others', 'Consensus Seq', 'Read alignment "Pileup"']]
+        # Generate Consensus Sequence as a string
+        consensus_sequence = ''.join([convert_to_iupac(seq) for seq in data['Consensus Seq']])
+        # Save consensus sequence to .txt file
+        txt_output_file = output_file.replace(".html", "_ConsensusSequence.txt")
+        with open(txt_output_file, 'w') as f:
+            f.write(consensus_sequence)
         # Applying specific style for the "Consensus Seq" column
         styled_data = data.style
         styled_data = styled_data.map(style_consensus, subset=['Consensus Seq'])
@@ -133,7 +185,10 @@ def read_bam(file_name, output_file):
                 background-color: #CE19F6;
             }
              .data.col6  {
-                background-color: #E4D5E7;
+                background-color: #BFB917;
+            }
+             .data.col7  {
+                background-color: #FAF68C;
             }
         </style>
         """
@@ -143,8 +198,9 @@ def read_bam(file_name, output_file):
         # Converte o DataFrame estilizado para HTML e salva no arquivo
         with open(output_file, "w") as text_file:
             text_file.write(final_html)
-        print("HTML file created successfully!")
+        print("✅ HTML file created successfully!")
+        print("✅ TXT file created successfully!")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"❌ An error occurred: {e}")
 
-#read_bam(file_name, output_file)
+read_bam(file_name, output_file)
