@@ -12,9 +12,9 @@ import re
 #MERGE MULTIPLE FASTQ.GZ FILES IN A SINGLE FILE
 
 # IMPUT PATH: Path to the folder with the fastq.gz files
-folder_of_gz_files_1 = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 04Abr\fastq_fail\barcode04'
+folder_of_gz_files_1 = r'C:\Users\...\imput_path'
 # OUTPUT PATH: Path to the folder we want to save our merged file
-output_file_1 = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 04Abr\fastq_fail\Mergedbarcode04_fastq_fail.fastq.gz'
+output_file_1 = r'C:\Users\...\output_path.fastq.gz'
 
 def fastq_gz_merge(folder_of_gz_files_1, output_file_1):
     with gzip.open(output_file_1, 'wb') as merged_file:
@@ -54,9 +54,9 @@ ambiguity_codes = {
 }
 
 #file_name ends in .tabular
-file_name = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 5Nov\MinION 5Nov (9h30 8Nov)\PCV2\Tabular_MinION_5Nov_PCV2_GenomeDetective.tabular'
+file_name = r'C:\Users\...\file_name.tabular'
 #output_file ends in .html
-output_file = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 5Nov\MinION 5Nov (9h30 8Nov)\PCV2\bam_GenomeDetective_MinION 5Nov barcode2_PCV2.html'
+output_file = r'C:\Users\...\output_file.html'
 
 def convert_to_iupac(seq):
     if len(seq) == 1:
