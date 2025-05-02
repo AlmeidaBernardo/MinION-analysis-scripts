@@ -1,30 +1,45 @@
-"Developed by Bernardo Almeida, version 2, April 2025"
+"Developed by Bernardo Almeida, version 3, May 2025"
 
 #IMPORTS
 import gzip
-import shutil
 import os
 import pandas as pd
 import csv
 import re
 
 
-#MERGE MULTIPLE FASTQ.GZ FILES IN A SINGLE FILE
+#MERGE MULTIPLE FASTQ.GZ FILES IN A SINGLE FILE AND SORTS THE SEQUENCES BY SIZE
 
 # IMPUT PATH: Path to the folder with the fastq.gz files
-folder_of_gz_files_1 = r'C:\Users\...\imput_path'
-# OUTPUT PATH: Path to the folder we want to save our merged file
-output_file_1 = r'C:\Users\...\output_path.fastq.gz'
+input_folder = r'C:\Users\...\folder_name'
+# OUTPUT PATH: Path to the folder we want to save our merged file (file name must end in .fastq.gz)
+output_path = r'C:\Users\...\file_name.fastq.gz'
 
-def fastq_gz_merge(folder_of_gz_files_1, output_file_1):
-    with gzip.open(output_file_1, 'wb') as merged_file:
-        for file in os.listdir(folder_of_gz_files_1):
-            if file.endswith('.fastq.gz'):
-                with gzip.open(os.path.join(folder_of_gz_files_1, file), 'rb') as f_in:
-                    shutil.copyfileobj(f_in, merged_file)
-    print(f"All files have been combined in {output_file_1}")
+def merge_and_sort_fastq_gz(input_folder, output_path):
+    reads = []
+    for file in os.listdir(input_folder):
+        if file.endswith('.fastq.gz'):
+            file_path = os.path.join(input_folder, file)
+            with gzip.open(file_path, "rt") as infile:
+                while True:
+                    header = infile.readline()
+                    if not header:
+                        break
+                    sequence = infile.readline().strip()
+                    plus = infile.readline()
+                    quality = infile.readline().strip()
+                    reads.append((header, sequence, plus, quality))
+    print(f"📥 Total reads found: {len(reads)}")
+    reads.sort(key=lambda x: len(x[1]), reverse=True)
+    with gzip.open(output_path, "wt") as outfile:
+        for header, sequence, plus, quality in reads:
+            outfile.write(header)
+            outfile.write(sequence + "\n")
+            outfile.write(plus)
+            outfile.write(quality + "\n")
+    print(f"✅ Ficheiro final ordenado gravado como: {output_path}")
 
-#fastq_gz_merge(folder_of_gz_files_1, output_file_1)
+#merge_and_sort_fastq_gz(input_folder, output_path)
 
 
 
@@ -53,10 +68,10 @@ ambiguity_codes = {
     'ACGT': 'N'
 }
 
-#file_name ends in .tabular
-file_name = r'C:\Users\...\file_name.tabular'
-#output_file ends in .html
-output_file = r'C:\Users\...\output_file.html'
+#file_name must end in .tabular
+file_name = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 2025_04_30\Barcode 20 _ 03762_1_jav\03762_1_jav _ PCV3 _ INSAFLU.tabular'
+#output_file must end in .html
+output_file = r'C:\Users\Utilizador\Desktop\Universidade\Mestrado MCB\_Dissertacao\Sequenciações\MiniON\MinION 2025_04_30\Barcode 20 _ 03762_1_jav\03762_1_jav _ PCV3 _ INSAFLU.html'
 
 def convert_to_iupac(seq):
     if len(seq) == 1:
@@ -203,4 +218,6 @@ def read_bam(file_name, output_file):
     except Exception as e:
         print(f"❌ An error occurred: {e}")
 
-read_bam(file_name, output_file)
+#read_bam(file_name, output_file)
+
+
